@@ -1,36 +1,41 @@
-cmake_minimum_required(VERSION 3.0)
-project(NVIDIA_SGEMM_PRACTICE)
+cmake_minimum_required(VERSION 3.19)
+project(NVIDIA_SGEMM_PRACTICE LANGUAGES CXX CUDA)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-# gcc/g++编译参数说明：
-# -O1~3编译器优化选项的4个级别，-O1默认，级别越大优化效果越好，但编译时间越长;
-# -std=c++11，采用C++11标准编译
-set(CMAKE_CXX_FLAGS "-O3 -std=c++11")
-
-# nvcc编译参数说明：
-# -g:主机代码添加调试信息;
-# -G:设备代码产生调试信息，将会禁用大多数编译器优化，造成设备代码运行缓慢;
-# -Xptxas -dlcm=ca启用L1缓存，-Xptxas -dlcm=cg关闭L1缓存
-
-# set(CUDA_NVCC_FLAGS -g;-G;-Xptxas;-dlcm=ca)
-# set(CUDA_NVCC_FLAGS -Xptxas;-dlcm=cg)
-set(CUDA_NVCC_FLAGS -arch=compute_70;-code=compute_70)
-
-# 若FIND CUDA ERROR，在~/.bashrc中添加配置环境变量和动态库路径
-# CUDA_HOME=/usr/local/cuda
-# export PATH=$CUDA_HOME/bin:$PATH
-# export LD_LIBRARY_PATH=$CUDA_HOME/lib64:$LD_LIBRARY_PATH
 find_package(CUDA REQUIRED)
 
-# 配置头文件搜索路径
+# ensure cuda is available
+include(CheckLanguage)
+check_language(CUDA)
+
+set(CMAKE_CXX_STANDARD 20)
+set(CUDA_COMPUTE_CAPABILITY 120)
+
+# in debug mode, add debug symbols to device code
+# this disables most optimizations and kills performance
+add_compile_options("$<$<AND:$<CONFIG:Debug>,$<COMPILE_LANGUAGE:CUDA>>:-G;-src-in-ptx>")
+# add_compile_options("--ptxas-options=-v")
+
+# Configure header file search paths
 include_directories(${CUDA_INCLUDE_DIRS})
 include_directories(${PROJECT_SOURCE_DIR}/src)
-# 配置待编译的源文件路径
+# Configure the source file path to be compiled
 aux_source_directory(${PROJECT_SOURCE_DIR}/src SRC)
-# 可执行文件输出路径
-set(EXECUTABLE_OUTPUT_PATH ${PROJECT_SOURCE_DIR})
-# 生成可执行文件
-CUDA_ADD_EXECUTABLE(sgemm sgemm.cu ${SRC})
 
-# link cudart cublas
-target_link_libraries(sgemm ${CUDA_LIBRARIES} ${CUDA_cublas_LIBRARY})
+# generate executable
+add_executable(sgemm sgemm.cu ${SRC})
+set_target_properties(sgemm PROPERTIES CUDA_ARCHITECTURES ${CUDA_COMPUTE_CAPABILITY})
+target_link_libraries(sgemm ${CUDA_LIBRARIES} ${CUDA_CUBLAS_LIBRARIES})
 
+add_executable(cuBLAS_sgemm cuBLAS_sgemm.cu )
+set_target_properties(sgemm PROPERTIES CUDA_ARCHITECTURES ${CUDA_COMPUTE_CAPABILITY})
+target_link_libraries(cuBLAS_sgemm ${CUDA_LIBRARIES} ${CUDA_CUBLAS_LIBRARIES})
+
+add_executable(simplest_kernel simplest_kernel.cu)
+set_target_properties(simplest_kernel PROPERTIES CUDA_ARCHITECTURES ${CUDA_COMPUTE_CAPABILITY})
+target_link_libraries(simplest_kernel ${CUDA_LIBRARIES})
+
+# matrix_transpose.cu not in repo yet — uncomment when available
+# add_executable(matrix_transpose matrix_transpose.cu)
+# set_target_properties(matrix_transpose PROPERTIES CUDA_ARCHITECTURES ${CUDA_COMPUTE_CAPABILITY})
+# target_link_libraries(matrix_transpose ${CUDA_LIBRARIES})
